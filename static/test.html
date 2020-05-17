@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Mapping South Africa with dot distribution</title>
+    <style type="text/css">
+      html, body {
+          width: 100%;
+          height: 100%;
+          margin: 0;
+      }
+      #legend, #basicMap {
+        position:fixed;
+        top:0;
+        bottom:0;
+      }
+      #legend {
+        left:5px;
+        width:240px;
+        height:100%;
+        font-family:sans-serif;
+        font-size:12pt;
+      }
+      .heading {
+        font-size: 13pt;
+        font-weight: bold;
+      }
+      .srctext {
+        font-size:10pt;
+        font-style:italic;
+      }
+      .copyright {
+        position:absolute;
+        bottom:0;
+        font-size:8pt;
+        font-style:italic;
+      }
+      .copyright p.note { font-style:normal; }
+      #basicMap {
+        padding:0;
+        left:250px;
+        right:0;
+      }
+      .legtable { border-collapse: collapse; }
+      .legtable, .legtable tr, .legtable td { border: 5px solid white; }
+      td.legbox { width: 20px; height: 20px; }
+      .olImageLoadError { display: none; }
+
+    </style>
+    <link rel="stylesheet" href="theme/default/google.css" type="text/css">
+    <script src="OpenLayers.js"></script>
+    <script>
+    OpenLayers.Util.onImageLoadErrorColor = "transparent";
+
+    var dotdens = {0: "5000", 1: "2500", 2: "1000", 3: "500", 4: "250",
+        5: "100", 6: "50", 7: "25", 8: "10"};
+    var hhdens = {0: "2500", 1: "1000", 2: "500", 3: "250", 4: "100",
+        5: "50", 6: "25", 7: "10", 8: "5"};
+      
+    function onZoomEnd(e) {
+        if (hhinc.visibility) {
+            document.getElementById("dotdens").textContent = "One dot = " + hhdens[map.zoom] + " households";
+        } else {
+            document.getElementById("dotdens").textContent = "One dot = " + dotdens[map.zoom] + " people";
+        }
+    }
+
+    function init() {
+	    var wgs84 = new OpenLayers.Projection("EPSG:4326");
+    	//var lswitch = new OpenLayers.Control.LayerSwitcher();
+
+        map = new OpenLayers.Map("basicMap", {
+            controls: [
+                new OpenLayers.Control.Navigation(),
+                new OpenLayers.Control.PanZoomBar(),
+	            //lswitch,
+                new OpenLayers.Control.ArgParser({displayProjection: wgs84}),
+    	        new OpenLayers.Control.Permalink({displayProjection: wgs84})
+            ]
+        });
+        //lswitch.maximizeControl();
+
+
+        mapnik = new OpenLayers.Layer.OSM('Map',
+    	[
+    		"http://a.tile.cloudmade.com/482594c2fd284802b1bdde69a260b019/22677/256/${z}/${x}/${y}.png",
+    		"http://b.tile.cloudmade.com/482594c2fd284802b1bdde69a260b019/22677/256/${z}/${x}/${y}.png",
+    		"http://c.tile.cloudmade.com/482594c2fd284802b1bdde69a260b019/22677/256/${z}/${x}/${y}.png"
+	    ],
+    	{
+            zoomOffset: 6,
+            maxResolution: 2445.98,
+            numZoomLevels: 9,
+	    	tileOptions: {crossOriginKeyword: null}
+        });
+    	//mapnik.setOpacity(0.5);
+        map.addLayer(mapnik);
+
+	    aerial = new OpenLayers.Layer.OSM('Aerial photo',
+    	[
+            "http://a.aerial.openstreetmap.org.za/ngi-aerial/${z}/${x}/${y}.jpg",
+            "http://b.aerial.openstreetmap.org.za/ngi-aerial/${z}/${x}/${y}.jpg",
+            "http://c.aerial.openstreetmap.org.za/ngi-aerial/${z}/${x}/${y}.jpg"
+        ],
+	    {       
+            zoomOffset: 6,
+            maxResolution: 2445.98,
+            numZoomLevels: 9,
+            tileOptions: {crossOriginKeyword: null}
+        });
+    	aerial.setOpacity(0.6);
+    	map.addLayer(aerial);
+
+        race = new OpenLayers.Layer.OSM("Race", "/tiles/race/${z}/${x}/${y}.png",
+        {
+            zoomOffset: 6,
+            maxResolution: 2445.98,
+            numZoomLevels: 9,
+		    transitionEffect: null,
+            isBaseLayer: false
+        });
+        map.addLayer(race);
+        
+        lang = new OpenLayers.Layer.OSM("Language", "/tiles/lang/${z}/${x}/${y}.png",
+        {
+            zoomOffset: 6,
+            maxResolution: 2445.98,
+            numZoomLevels: 9,
+		    transitionEffect: null,
+            isBaseLayer: false
+        });
+        if (!(location.href.match(/(\?|&)layers($|&|=)/))) {
+            lang.setVisibility(false);
+        }
+        map.addLayer(lang);
+
+        hhinc = new OpenLayers.Layer.OSM("HH Income", "/tiles/hhinc/${z}/${x}/${y}.png",
+        {
+            zoomOffset: 6,
+            maxResolution: 2445.98,
+            numZoomLevels: 9,
+		    transitionEffect: null,
+            isBaseLayer: false
+        });
+        if (!(location.href.match(/(\?|&)layers($|&|=)/))) {
+            hhinc.setVisibility(false);
+        }
+        map.addLayer(hhinc);
+
+
+        map.events.register("zoomend", map, onZoomEnd);
+    	if (!map.getCenter()) {
+            var position = new OpenLayers.LonLat(24,-28.5).transform(wgs84, new OpenLayers.Projection("EPSG:900913"));
+            map.setCenter(position, 0);
+    	}
+	
+        onZoomEnd();
+
+        document.getElementById("hhincradio").checked = hhinc.getVisibility();
+        document.getElementById("langradio").checked = lang.getVisibility();
+        document.getElementById("raceradio").checked = race.getVisibility();
+        switchData();
+
+        document.getElementById("mapradio").checked = mapnik.getVisibility();
+        document.getElementById("aerialradio").checked = aerial.getVisibility();
+        switchBg();
+    }
+
+    function switchData()
+    {
+        race.setVisibility(document.getElementById("raceradio").checked);
+        lang.setVisibility(document.getElementById("langradio").checked);
+        hhinc.setVisibility(document.getElementById("hhincradio").checked);
+        document.getElementById("racelegend").style.display = (race.visibility ? "block" : "none")
+        document.getElementById("langlegend").style.display = (lang.visibility ? "block" : "none")
+        document.getElementById("hhinclegend").style.display = (hhinc.visibility ? "block" : "none")
+    }
+
+    function switchBg()
+    {
+        if (document.getElementById("mapradio").checked) {
+            map.setBaseLayer(mapnik);
+        }
+        else
+        {
+            map.setBaseLayer(aerial);
+        }
+        document.getElementById("cloudmade").style.display = (mapnik.visibility ? "block" : "none");
+        document.getElementById("cdngi").style.display = (aerial.visibility ? "block" : "none");
+    }
+</script>
+</head>
+<body onload="init();">
+    <div id="legend">
+      <p class="heading">Mapping South Africa with dot distribution</p>
+      <p><em>by <a href="http://adrianfrith.com/">Adrian Frith</a></em></p>
+
+      <hr />
+
+      <p>Select displayed data:<br />
+        <input type="radio" name="dataradio" id="raceradio" checked onchange="switchData()">Race</input>&nbsp;
+        <input type="radio" name="dataradio" id="langradio" onchange="switchData()">Language</input><br />
+        <input type="radio" name="dataradio" id="hhincradio" onchange="switchData()">Household income</input>
+      </p>
+      
+      <p>Select background:<br />
+        <input type="radio" name="bgradio" id="mapradio" checked onchange="switchBg()">Map</input>&nbsp;
+        <input type="radio" name="bgradio" id="aerialradio" onchange="switchBg()">Aerial photo</input>
+
+      <hr />
+
+      <p id="dotdens">One dot = 5000 people</p>
+
+      <div id="racelegend">
+      <p><table class="legtable">
+        <tr>
+          <td class="legbox" style="background-color:#60b260"></td>
+          <td>Black African</td>
+        </tr>
+        <tr>
+          <td class="legbox" style="background-color:#f4b925"></td>
+          <td>Coloured</td>
+        </tr>
+        <tr>
+          <td class="legbox" style="background-color:#ea4934"></td>
+          <td>Indian or Asian</td>
+        </tr>
+        <tr>
+          <td class="legbox" style="background-color:#b270e5"></td>
+          <td>White</td>
+        </tr>
+        <tr>
+          <td class="legbox" style="background-color:#777777"></td>
+          <td>Other</td>
+        </tr>
+      </table></p>
+      <p class="srctext">From self-identification in Census 2011.</p>
+      </div>
+
+      <div id="langlegend" style="display:none">
+      <p><table class="legtable">
+        <tr>
+          <td class="legbox" style="background-color:#80b1d3"></td>
+          <td>Afrikaans</td>
+          <td class="legbox" style="background-color:#fb8072"></td>
+          <td>English</td>
+        </tr>
+        <tr>
+          <td class="legbox" style="background-color:#52b23e"></td>
+          <td>isiNdebele</td>
+          <td class="legbox" style="background-color:#b49d00"></td>
+          <td>isiXhosa</td>
+        </tr>
+        <tr>
+          <td class="legbox" style="background-color:#8dd3c7"></td>
+          <td>isiZulu</td>
+          <td class="legbox" style="background-color:#fdb462"></td>
+          <td>Sepedi</td>
+        </tr>
+        <tr>
+          <td class="legbox" style="background-color:#f997c9"></td>
+          <td>Sesotho</td>
+          <td class="legbox" style="background-color:#b3de69"></td>
+          <td>Setswana</td>
+        </tr>
+        <tr>
+          <td class="legbox" style="background-color:#bc80bd"></td>
+          <td>siSwati</td>
+          <td class="legbox" style="background-color:#bebada"></td>
+          <td>Tshiven&#x1e13;a</td>
+        </tr>
+        <tr>
+          <td class="legbox" style="background-color:#ffffb3"></td>
+          <td>Xitsonga</td>
+          <td class="legbox" style="background-color:#777777"></td>
+          <td>Other</td>
+        </tr>
+      </table></p>
+      <p class="srctext">First language from Census 2011. Note that some 800&nbsp;000 people living in institutional settings were not asked about their languages and are not included here.</p>
+      </div>
+
+      <div id="hhinclegend">
+      <p><table class="legtable">
+        <tr>
+          <td class="legbox" style="background-color:#fb8072"></td>
+          <td style="text-align:right">R0</td><td>&ndash;</td><td style="text-align:right">R4&nbsp;800</td>
+        </tr>
+        <tr>
+          <td class="legbox" style="background-color:#fdb462"></td>
+          <td style="text-align:right">R4&nbsp;801</td><td>&ndash;</td><td style="text-align:right">R19&nbsp;600</td>
+        </tr>
+        <tr>
+          <td class="legbox" style="background-color:#b3de69"></td>
+          <td style="text-align:right">R19&nbsp;601</td><td>&ndash;</td><td style="text-align:right">R76&nbsp;400</td>
+        </tr>
+        <tr>
+          <td class="legbox" style="background-color:#8dd3c7"></td>
+          <td style="text-align:right">R76&nbsp;401</td><td>&ndash;</td><td style="text-align:right">R307&nbsp;600</td>
+        </tr>
+        <tr>
+          <td class="legbox" style="background-color:#80b1d3"></td>
+          <td style="text-align:right">R307&nbsp;601</td><td>&ndash;</td><td style="text-align:right">R1&nbsp;228&nbsp;800</td>
+        </tr>
+        <tr>
+          <td class="legbox" style="background-color:#bc80bd"></td>
+          <td style="text-align:right">R1&nbsp;228&nbsp;800</td><td>&ndash;</td><td></td>
+        </tr>
+      </table></p>
+      <p class="srctext">Annual household income from Census 2011. Note that some 800&nbsp;000 people living in institutional settins are not included in household statistics.</p>
+      </div>
+
+
+      <div class="copyright">
+      <p class="note">Note: dots are evenly distributed across census areas.</p>
+      <p>Dot map tiles &copy; <a href="http://adrianfrith.com/">Adrian Frith</a>; population data from <a href="http://www.statssa.gov.za/">Census 2011</a> &copy; <a href="http://beta2.statssa.gov.za/?page_id=425">Statistics South Africa</a>.</p>
+      <p id="cloudmade">Base map tiles &copy; <a href="http://cloudmade.com/">CloudMade</a>; map data <a href="http://www.openstreetmap.org/copyright">ODbL</a> &copy; <a href="http://www.openstreetmap.org/">OpenStreetMap contributors</a>.</p>
+	<p id="cdngi">Aerial photography &copy; <a href="http://www.ngi.gov.za/">Chief Directorate: National Geo-spatial Information</a>.</p>
+      </div>
+    </div>
+    <div id="basicMap"></div>
+  </body>
+</html>
